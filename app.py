@@ -2041,6 +2041,8 @@ sidebar = html.Aside([
         html.Label("PRIORIDAD", className="filter-label"),
         dcc.Dropdown(id="f-prio", options=prio_opts, value=[], multi=True, clearable=True, searchable=True, placeholder="Todas las prioridades")
     ], className="sidebar-filters"),
+    # Solo en celular: cierra el menú desplegable para ver el tablero filtrado.
+    html.Button("VER TABLERO", id="mobile-menu-close", n_clicks=0, className="mobile-menu-close"),
     html.Div([
         html.Div("AUTORES · EQUIPO 2", className="authors-title"),
         html.Div([html.Div("MG", className="author-avatar"), html.Div("Mauricio Guerrero", className="author-name")], className="author-row"),
@@ -2050,12 +2052,31 @@ sidebar = html.Aside([
     ], className="authors-panel")
 ], id="sidebar", className="sidebar")
 
+PAGES = [
+    ("/inicio", "Inicio"),
+    ("/resumen", "Resumen gerencial"),
+    ("/cumplimiento", "Cumplimiento y plazos"),
+    ("/pendientes", "Pendientes por cumplir"),
+    ("/territorio", "Territorio y red"),
+]
+
+# Barra superior fija, visible solo en celular (≤ 760 px). El botón «Menú»
+# despliega la barra lateral completa (navegación, filtros y autores) bajo la barra.
+mobile_topbar = html.Div([
+    html.Img(src="/assets/logo.svg", alt="ENERGY", className="mobile-topbar-logo"),
+    html.Div([
+        html.Div("GESTIÓN DE AVISOS · ENERGY", className="mobile-topbar-brand"),
+        html.Div("Inicio", id="mobile-page-name", className="mobile-topbar-page"),
+    ], className="mobile-topbar-text"),
+    html.Button("Menú", id="mobile-sidebar-toggle", n_clicks=0, className="mobile-menu-btn"),
+], className="mobile-topbar")
+
 app.layout = html.Div([
     dcc.Location(id="url", refresh=False),
     dcc.Store(id="extra-filters", data={}),
+    mobile_topbar,
     sidebar,
     html.Main([
-        html.Button("Filtros", id="mobile-sidebar-toggle", n_clicks=0, className="mobile-sidebar-toggle"),
         html.Div(id="page-content")
     ], className="main-content")
 ], className="app-wrapper")
@@ -2176,18 +2197,30 @@ def render_page(pathname, years, types, depts, prios, extra):
     Output("nav-inicio", "className"), Output("nav-resumen", "className"),
     Output("nav-cumplimiento", "className"), Output("nav-pendientes", "className"),
     Output("nav-territorio", "className"),
+    Output("mobile-page-name", "children"),
     Input("url", "pathname")
 )
 def active_nav(path):
-    p = path or "/inicio"
-    paths = ["/inicio", "/resumen", "/cumplimiento", "/pendientes", "/territorio"]
-    return tuple("nav-link active" if p == x else "nav-link" for x in paths)
+    p = path if path in dict(PAGES) else "/inicio"
+    classes = tuple("nav-link active" if p == x else "nav-link" for x, _ in PAGES)
+    return (*classes, dict(PAGES)[p])
 
 @app.callback(
-    Output("sidebar", "className"), Input("mobile-sidebar-toggle", "n_clicks")
+    Output("sidebar", "className"),
+    Output("mobile-sidebar-toggle", "children"),
+    Input("mobile-sidebar-toggle", "n_clicks"),
+    Input("mobile-menu-close", "n_clicks"),
+    Input("url", "pathname"),
+    State("sidebar", "className"),
 )
-def toggle_sidebar(n):
-    return "sidebar mobile-open" if n and n % 2 == 1 else "sidebar"
+def toggle_sidebar(_toggle, _close, _path, current):
+    """
+    Menú desplegable del celular: el botón «Menú» lo abre o lo cierra; elegir
+    una página o pulsar «Ver tablero» lo cierra. En escritorio no tiene efecto.
+    """
+    is_open = "mobile-open" in (current or "")
+    is_open = (not is_open) if ctx.triggered_id == "mobile-sidebar-toggle" else False
+    return ("sidebar mobile-open", "Cerrar") if is_open else ("sidebar", "Menú")
 
 if __name__ == "__main__":
     # Ejecución local: python app.py → http://127.0.0.1:8050/
